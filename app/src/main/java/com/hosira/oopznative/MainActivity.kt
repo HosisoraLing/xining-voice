@@ -103,7 +103,12 @@ fun AppRoot() {
                                 status = "已登录：${it.name.ifBlank { it.uid }}"
                                 screen = Screen.Areas
                             }
-                            .onFailure { status = "登录失败：${it.message}" }
+                            .onFailure {
+                                val msg = it.message.orEmpty()
+                                status = if (msg.contains("401") || msg.contains("签名"))
+                                    "密码登录不可用（Oopz 要签名）→ 请点上面的「网页登录」"
+                                else "登录失败：$msg"
+                            }
                     }
                 }
             )
@@ -185,12 +190,17 @@ fun LoginScreen(
             Text(if (sms) "验证码登录（需先在官方客户端获取验证码）" else "密码登录")
         }
         Spacer(Modifier.height(16.dp))
-        Button(onClick = { onLogin(phone.trim(), code, sms) }, modifier = Modifier.fillMaxWidth()) {
-            Text("密码/验证码登录")
+        Button(onClick = onWebLogin, modifier = Modifier.fillMaxWidth()) {
+            Text("网页登录（推荐，一次就好）")
         }
-        Spacer(Modifier.height(8.dp))
-        OutlinedButton(onClick = onWebLogin, modifier = Modifier.fillMaxWidth()) {
-            Text("网页登录（借官方页面拿凭证，推荐）")
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Oopz 的接口要求客户端签名，密码直连会被 401 拦掉；网页登录借官方页面完成签名，之后全程原生。",
+            style = MaterialTheme.typography.labelSmall
+        )
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(onClick = { onLogin(phone.trim(), code, sms) }, modifier = Modifier.fillMaxWidth()) {
+            Text("密码/验证码直连（当前会被 401，备用）")
         }
         Spacer(Modifier.height(12.dp))
         Text(status, style = MaterialTheme.typography.bodySmall)

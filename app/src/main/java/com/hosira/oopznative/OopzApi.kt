@@ -79,6 +79,8 @@ object OopzApi {
             val root = runCatching { JSONObject(text) }.getOrElse {
                 throw IllegalStateException("登录响应解析失败：${text.take(120)}")
             }
+            if (code == 401) throw IllegalStateException("接口返回 401：Oopz 要求客户端签名，请改用「网页登录」")
+            if (code == 428) throw IllegalStateException("接口返回 428：被风控拦了，稍后再试或改用「网页登录」")
             if (!root.optBoolean("status") || root.optString("code") != "200") {
                 throw IllegalStateException(root.optString("message").ifBlank { "登录失败（${root.optString("code")}）" })
             }
