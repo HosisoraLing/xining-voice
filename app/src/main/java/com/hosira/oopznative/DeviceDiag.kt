@@ -57,6 +57,21 @@ object DeviceDiag {
         }
         sb.appendLine()
 
+        sb.appendLine("互联互通/车机相关包：")
+        val links = XiaomiLinkHelper.installedLinks(context)
+        if (links.isEmpty()) sb.appendLine("  · 未发现（可能被包可见性限制）")
+        else links.forEach { sb.appendLine("  · ${it.pkg}（命中 ${it.matched}）") }
+        sb.appendLine()
+
+        sb.appendLine("互联互通可能使用的音频通道：")
+        val linkDevices = XiaomiLinkHelper.linkAudioDevices(context)
+        if (linkDevices.isEmpty()) sb.appendLine("  · 无")
+        else linkDevices.forEach {
+            sb.appendLine("  · ${XiaomiLinkHelper.describe(it.type)} — ${it.productName}（${if (it.isSource) "输入" else "输出"}）")
+        }
+        sb.appendLine("建议车机输出：${XiaomiLinkHelper.preferredCarOutput(context)?.let { XiaomiLinkHelper.describe(it.type) } ?: "无"}")
+        sb.appendLine()
+
         val car = CarLinkHelper.carConnected(context)
         sb.appendLine("车机检测：${car?.let { "${it.name}（可拾音=${it.supportsMic}）" } ?: "未连接"}")
         CarLinkHelper.connectedDevices(context).forEach { sb.appendLine("  · 蓝牙：${it.name} 车机=${it.isCar}") }

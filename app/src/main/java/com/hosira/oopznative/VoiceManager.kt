@@ -53,11 +53,13 @@ object VoiceManager {
     }
 
     enum class Route(val label: String) {
-        SPEAKER("扬声器"), EARPIECE("听筒"), WIRED("有线耳机"), BLUETOOTH("蓝牙"), AUTO("系统自动")
+        SPEAKER("扬声器"), EARPIECE("听筒"), WIRED("有线耳机"), BLUETOOTH("蓝牙"),
+        CAR_LINK("小米互联互通/车机"), AUTO("系统自动")
     }
 
     fun init(context: Context) {
         if (trtc != null) return
+        appContext = context.applicationContext
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         trtc = TRTCCloud.sharedInstance(context.applicationContext).also { cloud ->
             cloud.setListener(object : TRTCCloudListener() {
@@ -151,6 +153,10 @@ object VoiceManager {
                 communicationDevice(AudioDeviceInfo.TYPE_BUILTIN_EARPIECE)
             }
             Route.WIRED -> communicationDevice(AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES)
+            Route.CAR_LINK -> communicationDevice(
+                AudioDeviceInfo.TYPE_BUS, AudioDeviceInfo.TYPE_USB_HEADSET,
+                AudioDeviceInfo.TYPE_USB_DEVICE, AudioDeviceInfo.TYPE_REMOTE_SUBMIX
+            )
             Route.BLUETOOTH -> communicationDevice(AudioDeviceInfo.TYPE_BLUETOOTH_SCO, AudioDeviceInfo.TYPE_BLE_HEADSET)
             Route.AUTO -> {
                 cloud.setAudioRoute(TRTCCloudDef.TRTC_AUDIO_ROUTE_SPEAKER)
@@ -175,6 +181,8 @@ object VoiceManager {
      * - CAR_MIC：走 HFP/SCO，车机麦 + 车机音响，TRTC 内置 3A 全开（最省性能）
      * - PHONE_MIC_MEDIA：关掉 SCO，手机麦采集（系统 AEC/NS），输出走媒体流 → 车机 A2DP 音响
      */
+    private var appContext: android.content.Context? = null
+
     fun applyCarMode(mode: CarMode) {
         carMode = mode
         val cloud = trtc ?: return
