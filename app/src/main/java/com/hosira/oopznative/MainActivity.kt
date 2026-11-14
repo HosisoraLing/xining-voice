@@ -269,6 +269,7 @@ fun VoiceScreen(
 ) {
     var channels by remember { mutableStateOf<List<OopzApi.Channel>>(emptyList()) }
     var wsState by remember { mutableStateOf("未连接网关") }
+    var expired by remember { mutableStateOf(false) }
 
     LaunchedEffect(session, area) {
         val s = session ?: return@LaunchedEffect
@@ -288,7 +289,14 @@ fun VoiceScreen(
                     }
                 }
             }
-        }.onFailure { wsState = it.message ?: "网关连接失败" }
+        }.onFailure {
+            val msg = it.message ?: "网关连接失败"
+            wsState = msg
+            if (msg.contains("签名")) {
+                SessionStore.clear(context)
+                expired = true
+            }
+        }
     }
 
     var log by remember { mutableStateOf(listOf<String>()) }
@@ -312,6 +320,13 @@ fun VoiceScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(area.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             TextButton(onClick = { VoiceManager.leaveRoom(); VoiceService.stop(context); onBack() }) { Text("返回") }
+        }
+        if (expired) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("登录已过期，需要重新网页登录", color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                TextButton(onClick = onBack) { Text("去重登") }
+            }
         }
         if (car != null) {
             Text("🚗 已连接车机：${car.name}", style = MaterialTheme.typography.bodySmall)

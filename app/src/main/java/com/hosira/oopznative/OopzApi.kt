@@ -190,5 +190,27 @@ object OopzApi {
     private fun parseRtc(text: String): RtcCredentials? =
         RtcParser.parse(text)?.let { RtcCredentials(it.sdkAppId, it.userId, it.userSig, it.roomId) }
 
+    /** 备用路径：部分版本的进频道挂在 /rtc/v1 基址下 */
+    suspend fun enterVoiceChannelFallback(session: Session, areaId: String, channelId: String): RtcCredentials? =
+        withContext(Dispatchers.IO) {
+            val payload = JSONObject()
+                .put("type", "VOICE").put("area", areaId).put("channel", channelId)
+                .put("fromChannel", "").put("fromArea", "").put("password", "")
+                .put("sign", 0).put("pid", -1)
+            val req = Request.Builder()
+                .url("$BASE/rtc/v1/channel/enter")
+                .post(payload.toString().toRequestBody(jsonType))
+                .header("Oopz-Signature", session.signature)
+                .header("Oopz-Sign", session.signature)
+                .header("Oopz-Person", session.uid)
+                .header("Oopz-Device-Id", deviceId())
+                .header("Oopz-Time", System.currentTimeMillis().toString())
+                .build()
+            val resp = http.newCall(req).execute()
+            val text = resp.body?.string().orEmpty()
+            record("进频道(rtc 基址)", resp.code, text)
+            parseRtc(text)
+        }
+
     fun rtcDebugDump(): String = lastRtcRaw.take(400)
 }
