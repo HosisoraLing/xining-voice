@@ -272,7 +272,18 @@ fun AreasScreen(
         }
         if (MiuiHelper.isMiui()) {
             Spacer(Modifier.height(8.dp))
+            var showApiDiag by remember { mutableStateOf(false) }
+            TextButton(onClick = { showApiDiag = !showApiDiag }) {
+                Text(if (showApiDiag) "收起接口诊断" else "接口诊断")
+            }
             TextButton(onClick = onDiag) { Text("设备诊断") }
+            if (showApiDiag) {
+                Text("最近请求：", style = MaterialTheme.typography.labelMedium)
+                OopzApi.debugLog.takeLast(4).forEach { line ->
+                    Text(line, style = MaterialTheme.typography.labelSmall)
+                    HorizontalDivider()
+                }
+            }
             TextButton(onClick = { MiuiHelper.openAutoStartSettings(context) }) {
                 Text("小米自启动设置")
             }

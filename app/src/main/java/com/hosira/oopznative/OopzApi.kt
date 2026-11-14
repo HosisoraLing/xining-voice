@@ -16,6 +16,7 @@ object OopzApi {
 
     // 官方网页端（2026-11 抓包）用的是 gateway-n.oopz.cn；老文档里的 api.oopz.cn 已解析不到
     private const val BASE = "https://gateway-n.oopz.cn"
+    private const val BASE_ALT = "https://gateway.oopz.cn"   // 老网关，做兜底
     private const val APP_VERSION = "0.20.99"
     private const val APP_VERSION_NUM = "20099"
 
@@ -108,16 +109,47 @@ object OopzApi {
     data class Area(val id: String, val name: String, val avatar: String)
 
     suspend fun subscribedAreas(session: Session): List<Area> = withContext(Dispatchers.IO) {
-        val resp = http.newCall(authedRequest("/userSubscribeArea/v1/list", session)).execute()
-        val text = resp.body?.string().orEmpty()
-        val root = JSONObject(text)
-        val arr = root.optJSONArray("data") ?: return@withContext emptyList()
-        buildList {
-            for (i in 0 until arr.length()) {
-                val o = arr.optJSONObject(i) ?: continue
-                add(Area(o.optString("id"), o.optString("name"), o.optString("avatar")))
+        var lastError: String = "未知错误"
+        for (base in listOf(BASE, BASE_ALT)) {
+            val url = "$base/client/v1/area/v1/home/v1/subscribed"
+            val req = Request.Builder()
+                .url(url)
+                .header("Oopz-Signature", session.signature)
+                .header("Oopz-Sign", session.signature)
+                .header("Oopz-Person", session.uid)
+                .header("Oopz-Device-Id", deviceId())
+                .header("Oopz-Time", System.currentTimeMillis().toString())
+                .header("Oopz-App-Version", APP_VERSION)
+                .header("Oopz-App-Version-Number", APP_VERSION_NUM)
+                .get()
+                .build()
+            val resp = http.newCall(req).execute()
+            val text = resp.body?.string().orEmpty()
+            record("域列表 ${base.substringAfter("//")}", resp.code, text)
+
+            if (resp.code == 401) {
+                lastError = "401：签名未被接受（签名可能过期或提取有误）"
+                continue
             }
+            if (text.isBlank()) {
+                lastError = "HTTP ${resp.code}，响应为空"
+                continue
+            }
+            val root = runCatching { JSONObject(text) }.getOrNull()
+                ?: run { lastError = "响应不是 JSON：${text.take(80)}"; null } ?: continue
+            val arr = root.optJSONArray("data") ?: run {
+                lastError = "响应缺少 data：${text.take(120)}"
+                null
+            } ?: continue
+            val out = buildList {
+                for (i in 0 until arr.length()) {
+                    val o = arr.optJSONObject(i) ?: continue
+                    add(Area(o.optString("id"), o.optString("name"), o.optString("avatar")))
+                }
+            }
+            return@withContext out
         }
+        throw IllegalStateException(lastError)
     }
 
     data class Channel(val id: String, val name: String, val type: String)
@@ -129,6 +161,7 @@ object OopzApi {
         ).execute()
         val text = resp.body?.string().orEmpty()
         record("频道列表", resp.code, text)
+        if (text.isBlank()) return@withContext emptyList()
         val root = runCatching { JSONObject(text) }.getOrNull() ?: return@withContext emptyList()
         val data = root.opt("data")
         val out = mutableListOf<Channel>()
