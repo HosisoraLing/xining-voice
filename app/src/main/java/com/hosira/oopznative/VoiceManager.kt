@@ -110,6 +110,19 @@ object VoiceManager {
         trtc?.exitRoom()
     }
 
+    /** 不上房也能测麦克风：直接开本地采集，电平会写进 localVolume */
+    fun selfTestMic(): Boolean = runCatching {
+        val cloud = trtc ?: return false
+        cloud.startLocalAudio(TRTCCloudDef.TRTC_AUDIO_QUALITY_SPEECH)
+        val params = TRTCCloudDef.TRTCAudioVolumeEvaluateParams().apply { interval = 200 }
+        cloud.enableAudioVolumeEvaluation(true, params)
+        emit("麦克风自测已启动")
+        true
+    }.getOrElse {
+        emit("麦克风自测失败：${it.message}")
+        false
+    }
+
     fun muteRemote(mute: Boolean) {
         trtc?.muteAllRemoteAudio(mute)
         emit(if (mute) "已静音对方声音" else "对方声音已恢复")

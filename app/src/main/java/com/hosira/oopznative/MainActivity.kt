@@ -278,7 +278,7 @@ fun VoiceScreen(
             .onSuccess { if (it.isNotEmpty()) channels = it }
         // 网关实时补全（collect 本身是挂起的，直接在当前 LaunchedEffect 里跑）
         runCatching {
-            OopzWs(s, SessionStore.deviceId(context)).connect().collect { ev: OopzWs.Event ->
+            OopzWs(s, SessionStore.deviceId(context)).connectWithRetry().collect { ev: OopzWs.Event ->
                 val found = OopzWs.extractChannels(ev.body)
                 if (found.isNotEmpty()) channels = (channels + found).distinctBy { it.id }
                 when (ev.id) {
@@ -387,6 +387,12 @@ fun VoiceScreen(
                 modifier = Modifier.fillMaxWidth()
             )
         }
+
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = {
+            val ok = VoiceManager.selfTestMic()
+            log = log + if (ok) "麦克风自测：采集已启动，对着手机说话看电平" else "麦克风自测：启动失败（检查权限）"
+        }) { Text("麦克风自测") }
 
         Spacer(Modifier.height(12.dp))
         OutlinedButton(onClick = {

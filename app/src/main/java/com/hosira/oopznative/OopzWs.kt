@@ -71,6 +71,22 @@ class OopzWs(private val session: OopzApi.Session, private val deviceId: String)
         awaitClose { socket.close(1000, "bye") }
     }
 
+    /** 带自动重连的流：断线后 2s/4s/8s/16s 重试，最多 5 次 */
+    fun connectWithRetry(): Flow<Event> = kotlinx.coroutines.flow.flow {
+        var attempt = 0
+        while (attempt < 5) {
+            try {
+                connect().collect { emit(it) }
+                return@flow
+            } catch (e: Exception) {
+                attempt++
+                if (e.message?.contains("签名") == true) throw e
+                kotlinx.coroutines.delay(2000L * attempt)
+            }
+        }
+        throw IllegalStateException("网关重连失败（已重试 5 次）")
+    }
+
     companion object {
         private const val TAG = "OopzWs"
         const val HANDSHAKE = 253
