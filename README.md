@@ -1,5 +1,13 @@
 # Oopz 原生 Android 客户端
 
+> 第三方客户端，与 Oopz 官方无关。仅供个人使用，遵守官方服务条款。
+
+## 下载
+
+最新安装包在 [Releases](https://github.com/HosisoraLing/oopz-native/releases) 页面（arm64，约 21MB）。
+安装说明见 [INSTALL.md](INSTALL.md)。
+
+
 无广告、无内置浏览器内核（登录复用系统 WebView）、原生 TRTC 语音的 Oopz 第三方客户端。
 
 ## 现状
@@ -27,6 +35,10 @@
 - AI 降噪（AIDenoiser）只有 Web 插件版；Android 用 SDK 内置 3A。
 
 ## 构建
+
+> 仓库里不含签名密钥（`release.keystore` 被 .gitignore 排除）。
+> 自己构建请把 `app/build.gradle.kts` 里的 signingConfigs 换成自己的 keystore，或直接 `assembleDebug`。
+
 
 ```bash
 export ANDROID_HOME=/root/android-sdk JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
