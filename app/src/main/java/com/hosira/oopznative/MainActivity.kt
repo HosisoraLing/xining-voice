@@ -94,6 +94,10 @@ fun AppRoot() {
                 onWebLogin = {
                     webLogin.launch(android.content.Intent(context, WebLoginActivity::class.java))
                 },
+                onSmsLogin = {
+                    // 短信验证码必须走官方页面（人机验证 + 签名都在里面完成）
+                    webLogin.launch(android.content.Intent(context, WebLoginActivity::class.java))
+                },
                 onLogin = { phone, code, isSms ->
                     scope.launch {
                         status = "正在登录…"
@@ -162,6 +166,7 @@ fun AppRoot() {
 fun LoginScreen(
     status: String,
     onWebLogin: () -> Unit,
+    onSmsLogin: () -> Unit,
     onLogin: (String, String, Boolean) -> Unit
 ) {
     var phone by remember { mutableStateOf("") }
@@ -184,18 +189,21 @@ fun LoginScreen(
             visualTransformation = if (sms) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth()
         )
+        Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(checked = sms, onCheckedChange = { sms = it })
+            FilterChip(selected = !sms, onClick = { sms = false }, label = { Text("用密码") })
             Spacer(Modifier.width(8.dp))
-            Text(if (sms) "验证码登录（需先在官方客户端获取验证码）" else "密码登录")
+            FilterChip(selected = sms, onClick = { onSmsLogin() }, label = { Text("用短信验证码") })
         }
         Spacer(Modifier.height(16.dp))
         Button(onClick = onWebLogin, modifier = Modifier.fillMaxWidth()) {
-            Text("网页登录（推荐，一次就好）")
+            Text("登录（在官方页里输密码或收验证码）")
         }
         Spacer(Modifier.height(6.dp))
         Text(
-            "语音服务端要求客户端签名，密码直连会被 401 拦掉；网页登录借官方页面完成签名，之后全程原生。",
+            "服务端的登录/短信接口都要求客户端签名，直接调用一律 401。" +
+                "这里用系统 WebView 打开官方登录页（密码、短信验证码、人机验证都在里面完成），" +
+                "登录成功后自动取回凭证，之后全程原生。",
             style = MaterialTheme.typography.labelSmall
         )
         Spacer(Modifier.height(12.dp))
