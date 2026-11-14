@@ -93,7 +93,7 @@ class VoiceService : Service() {
         if (VoiceControls.superIslandEnabled) {
             runCatching {
                 val extras = Bundle().apply {
-                    putString("miui.focus.param", "{\"type\":\"voice\",\"title\":\"Oopz 语音\",\"subTitle\":\"${if (VoiceControls.micEnabled) "麦克风开" else "已闭麦"}\"}")
+                    putString("miui.focus.param", "{\"type\":\"voice\",\"title\":\"汐宁语音\",\"subTitle\":\"${if (VoiceControls.micEnabled) "麦克风开" else "已闭麦"}\"}")
                     putBoolean("miui.focus.show", true)
                     putInt("miui.focus.priority", 1)
                 }

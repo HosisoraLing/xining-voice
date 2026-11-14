@@ -106,7 +106,7 @@ fun AppRoot() {
                             .onFailure {
                                 val msg = it.message.orEmpty()
                                 status = if (msg.contains("401") || msg.contains("签名"))
-                                    "密码登录不可用（Oopz 要签名）→ 请点上面的「网页登录」"
+                                    "密码登录不可用（服务端要签名）→ 请点上面的「网页登录」"
                                 else "登录失败：$msg"
                             }
                     }
@@ -172,7 +172,7 @@ fun LoginScreen(
         Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Oopz 语音（原生）", style = MaterialTheme.typography.headlineSmall)
+        Text("汐宁语音", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(24.dp))
         OutlinedTextField(phone, { phone = it }, label = { Text("手机号") }, singleLine = true,
             modifier = Modifier.fillMaxWidth())
@@ -195,7 +195,7 @@ fun LoginScreen(
         }
         Spacer(Modifier.height(6.dp))
         Text(
-            "Oopz 的接口要求客户端签名，密码直连会被 401 拦掉；网页登录借官方页面完成签名，之后全程原生。",
+            "语音服务端要求客户端签名，密码直连会被 401 拦掉；网页登录借官方页面完成签名，之后全程原生。",
             style = MaterialTheme.typography.labelSmall
         )
         Spacer(Modifier.height(12.dp))

@@ -1,10 +1,10 @@
-# Oopz 原生 Android 客户端
+# 汐宁语音（原生 Android 语音客户端）
 
-> 第三方客户端，与 Oopz 官方无关。仅供个人使用，遵守官方服务条款。
+> 个人自用的第三方语音客户端。与任何语音平台官方无关，仅供个人使用。
 
 ## 下载
 
-最新安装包在 [Releases](https://github.com/HosisoraLing/oopz-native/releases) 页面（arm64，约 21MB）。
+最新安装包在 [Releases](https://github.com/HosisoraLing/xining-voice/releases) 页面（arm64，约 21MB）。
 安装说明见 [INSTALL.md](INSTALL.md)。
 
 

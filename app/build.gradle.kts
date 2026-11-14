@@ -11,8 +11,8 @@ android {
         applicationId = "com.hosira.oopznative"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18
-        versionName = "0.16.1"
+        versionCode = 19
+        versionName = "0.16.2"
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 
