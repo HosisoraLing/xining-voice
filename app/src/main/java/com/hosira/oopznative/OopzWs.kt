@@ -9,13 +9,15 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
- * Oopz 网关（wss://ws.oopz.cn/）。
- * 握手：event 253，body 里带 person/deviceId/signature/deviceName。
- * 频道/域的实时数据都从这个连接推下来；REST 只用来拿静态信息。
+ * Oopz 网关 wss://ws.oopz.cn/
+ * 握手：{"time":ms,"event":253,"body":"{person,deviceId,signature,deviceName}"}
+ * 实测：握手后网关回 {"event":21,"body":"{\"checkRes\":false}"} 并断开 —— checkRes 即身份校验结果，
+ * false 说明签名无效/过期，需要重新走网页登录。
  */
 class OopzWs(private val session: OopzApi.Session, private val deviceId: String) {
 
@@ -35,28 +37,34 @@ class OopzWs(private val session: OopzApi.Session, private val deviceId: String)
                     .put("deviceId", deviceId)
                     .put("signature", session.signature)
                     .put("deviceName", deviceId)
-                val frame = JSONObject()
-                    .put("time", System.currentTimeMillis().toString())
-                    .put("event", 253)
-                    .put("body", body.toString())
-                webSocket.send(frame.toString())
-                Log.i("OopzWs", "已发送握手 253")
+                webSocket.send(
+                    JSONObject()
+                        .put("time", System.currentTimeMillis().toString())
+                        .put("event", HANDSHAKE)
+                        .put("body", body.toString())
+                        .toString()
+                )
+                Log.i(TAG, "已发送握手 253")
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 val json = runCatching { JSONObject(text) }.getOrNull() ?: return
-                val bodyText = json.optString("body")
-                val body = runCatching { JSONObject(bodyText) }.getOrNull()
-                trySend(Event(json.optInt("event", -1), body))
-                when (json.optInt("event")) {
-                    253 -> Unit
-                    1 -> Log.i("OopzWs", "网关就绪：${body?.optString("serverId")}")
-                    9 -> Log.i("OopzWs", "收到消息事件")
+                val body = runCatching { JSONObject(json.optString("body")) }.getOrNull()
+                val id = json.optInt("event", -1)
+                trySend(Event(id, body))
+                when (id) {
+                    CHECK_RESULT -> {
+                        val ok = body?.optBoolean("checkRes") == true
+                        Log.i(TAG, "网关校验 checkRes=$ok")
+                        if (!ok) channel.close(IllegalStateException("网关拒绝握手（签名无效或已过期）"))
+                    }
+                    READY -> Log.i(TAG, "网关就绪 serverId=${body?.optString("serverId")}")
+                    MESSAGE -> Log.i(TAG, "收到消息事件")
                 }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.w("OopzWs", "连接断开：${t.message}")
+                Log.w(TAG, "连接断开：${t.message}")
                 channel.close(t)
             }
         })
@@ -64,22 +72,29 @@ class OopzWs(private val session: OopzApi.Session, private val deviceId: String)
     }
 
     companion object {
-        /** 从网关事件里尽量捞出频道（字段随版本变化，做成宽松解析）。 */
+        private const val TAG = "OopzWs"
+        const val HANDSHAKE = 253
+        const val READY = 1
+        const val CHECK_RESULT = 21
+        const val MESSAGE = 9
+
+        /** 从网关事件里尽量捞出语音频道（字段随版本变化，宽松解析） */
         fun extractChannels(body: JSONObject?): List<OopzApi.Channel> {
             if (body == null) return emptyList()
             val out = mutableListOf<OopzApi.Channel>()
+
             fun walk(value: Any?) {
                 when (value) {
                     is JSONObject -> {
                         val id = value.optString("id")
                         val name = value.optString("name")
                         val type = value.optString("type")
-                        if (id.length in 20..30 && name.isNotBlank() && type.uppercase().contains("VOICE")) {
+                        if (id.length in 20..32 && name.isNotBlank() && type.uppercase().contains("VOICE")) {
                             out += OopzApi.Channel(id, name, type)
                         }
                         value.keys().forEach { walk(value.opt(it)) }
                     }
-                    is org.json.JSONArray -> for (i in 0 until value.length()) walk(value.opt(i))
+                    is JSONArray -> for (i in 0 until value.length()) walk(value.opt(i))
                 }
             }
             walk(body)

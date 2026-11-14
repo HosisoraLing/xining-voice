@@ -52,6 +52,15 @@ app/src/main/java/com/hosira/oopznative/
   WebLoginActivity.kt 系统 WebView 登录
 ```
 
+## 网关协议（2026-11 实测）
+
+```
+连 wss://ws.oopz.cn/  →  发 event 253 握手（person/deviceId/signature/deviceName）
+网关回 {"event":21,"body":"{\"checkRes\":false}"} 然后断开
+checkRes=true 才是通过；false 表示签名无效/过期，需要重新登录
+ws-n.oopz.cn / ws1 / ws2 行为一致
+```
+
 ## 已知待办
 
 1. 真机回归：网页登录 → 域 → 频道 → 进房（凭 TRTC 凭证）

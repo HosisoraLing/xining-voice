@@ -276,11 +276,19 @@ fun VoiceScreen(
         runCatching { OopzApi.channels(s, area.id) }
             .onSuccess { if (it.isNotEmpty()) channels = it }
         // 网关实时补全（collect 本身是挂起的，直接在当前 LaunchedEffect 里跑）
-        OopzWs(s, SessionStore.deviceId(context)).connect().collect { ev ->
-            val found = OopzWs.extractChannels(ev.body)
-            if (found.isNotEmpty()) channels = (channels + found).distinctBy { it.id }
-            if (ev.id == 1) wsState = "网关已就绪"
-        }
+        runCatching {
+            OopzWs(s, SessionStore.deviceId(context)).connect().collect { ev: OopzWs.Event ->
+                val found = OopzWs.extractChannels(ev.body)
+                if (found.isNotEmpty()) channels = (channels + found).distinctBy { it.id }
+                when (ev.id) {
+                    OopzWs.READY -> wsState = "网关已就绪"
+                    OopzWs.CHECK_RESULT -> {
+                        val ok = ev.body?.optBoolean("checkRes") == true
+                        wsState = if (ok) "网关校验通过" else "网关拒绝握手（签名失效，请重新网页登录）"
+                    }
+                }
+            }
+        }.onFailure { wsState = it.message ?: "网关连接失败" }
     }
 
     var log by remember { mutableStateOf(listOf<String>()) }
