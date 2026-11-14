@@ -56,7 +56,9 @@ class WebLoginActivity : Activity() {
                         finished = true
                         setResult(
                             RESULT_OK,
-                            Intent().putExtra("uid", uid).putExtra("signature", sig).putExtra("dump", lastDump)
+                            Intent().putExtra("uid", uid).putExtra("signature", sig)
+                                .putExtra("token", CredentialExtractor.extractToken(json).orEmpty())
+                                .putExtra("dump", lastDump)
                         )
                         finish()
                     }

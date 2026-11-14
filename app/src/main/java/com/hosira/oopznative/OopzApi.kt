@@ -38,7 +38,9 @@ object OopzApi {
         }
     }
 
-    data class Session(val uid: String, val signature: String, val name: String)
+    data class Session(val uid: String, val signature: String, val name: String, val token: String = "")
+
+    data class Area(val id: String, val name: String, val avatar: String)
 
     /** 密码登录；SMSCODE 走同样的入口，只是 code 是短信码。 */
     suspend fun login(phone: String, code: String, smsCode: Boolean, deviceId: String): Session =
@@ -93,61 +95,45 @@ object OopzApi {
 
     fun deviceId(): String = UUID.randomUUID().toString().replace("-", "").take(16)
 
-    private fun authedRequest(path: String, session: Session): Request =
-        Request.Builder()
-            .url("$BASE$path")
-            .header("Oopz-Signature", session.signature)
-            .header("Oopz-Sign", session.signature)
-            .header("Oopz-Person", session.uid)
-            .header("Oopz-Device-Id", deviceId())
-            .header("Oopz-Time", System.currentTimeMillis().toString())
-            .header("Oopz-App-Version", APP_VERSION)
-            .header("Oopz-App-Version-Number", APP_VERSION_NUM)
-            .get()
-            .build()
-
-    data class Area(val id: String, val name: String, val avatar: String)
+    /** 带签名地发一个请求：签名覆盖 path?query(+body) */
+    private fun signedCall(
+        method: String,
+        pathWithQuery: String,
+        body: String?,
+        session: Session?,
+        base: String = BASE
+    ): Pair<Int, String> {
+        val headers = OopzSigner.headers(pathWithQuery, body, session?.uid, session?.token)
+        val builder = Request.Builder().url("$base$pathWithQuery")
+        headers.forEach { (k, v) -> builder.header(k, v) }
+        val request = when (method.uppercase()) {
+            "POST" -> builder.post((body ?: "").toRequestBody(jsonType)).build()
+            "PUT" -> builder.put((body ?: "").toRequestBody(jsonType)).build()
+            else -> builder.get().build()
+        }
+        val resp = http.newCall(request).execute()
+        return resp.code to resp.body?.string().orEmpty()
+    }
 
     suspend fun subscribedAreas(session: Session): List<Area> = withContext(Dispatchers.IO) {
-        var lastError: String = "未知错误"
+        var lastError = "未知错误"
         for (base in listOf(BASE, BASE_ALT)) {
-            val url = "$base/client/v1/area/v1/home/v1/subscribed"
-            val req = Request.Builder()
-                .url(url)
-                .header("Oopz-Signature", session.signature)
-                .header("Oopz-Sign", session.signature)
-                .header("Oopz-Person", session.uid)
-                .header("Oopz-Device-Id", deviceId())
-                .header("Oopz-Time", System.currentTimeMillis().toString())
-                .header("Oopz-App-Version", APP_VERSION)
-                .header("Oopz-App-Version-Number", APP_VERSION_NUM)
-                .get()
-                .build()
-            val resp = http.newCall(req).execute()
-            val text = resp.body?.string().orEmpty()
-            record("域列表 ${base.substringAfter("//")}", resp.code, text)
-
-            if (resp.code == 401) {
-                lastError = "401：签名未被接受（签名可能过期或提取有误）"
-                continue
-            }
-            if (text.isBlank()) {
-                lastError = "HTTP ${resp.code}，响应为空"
-                continue
-            }
+            val path = "/client/v1/area/v1/home/v1/subscribed"
+            val (code, text) = signedCall("GET", path, null, session, base)
+            record("域列表 ${base.substringAfter("//")}", code, text)
+            if (code == 401) { lastError = "401：签名未被接受"; continue }
+            if (code == 428) { lastError = "428：缺少登录态（Oopz-Token/uid）"; continue }
+            if (text.isBlank()) { lastError = "HTTP $code，响应为空"; continue }
             val root = runCatching { JSONObject(text) }.getOrNull()
-                ?: run { lastError = "响应不是 JSON：${text.take(80)}"; null } ?: continue
-            val arr = root.optJSONArray("data") ?: run {
-                lastError = "响应缺少 data：${text.take(120)}"
-                null
-            } ?: continue
-            val out = buildList {
+            if (root == null) { lastError = "响应不是 JSON：${text.take(80)}"; continue }
+            val arr = root.optJSONArray("data")
+            if (arr == null) { lastError = "响应缺少 data：${text.take(120)}"; continue }
+            return@withContext buildList {
                 for (i in 0 until arr.length()) {
                     val o = arr.optJSONObject(i) ?: continue
                     add(Area(o.optString("id"), o.optString("name"), o.optString("avatar")))
                 }
             }
-            return@withContext out
         }
         throw IllegalStateException(lastError)
     }
@@ -156,11 +142,8 @@ object OopzApi {
 
     /** 频道列表：/client/v1/area/v1/detail/v1/channels?area=<areaId> */
     suspend fun channels(session: Session, areaId: String): List<Channel> = withContext(Dispatchers.IO) {
-        val resp = http.newCall(
-            authedRequest("/client/v1/area/v1/detail/v1/channels?area=$areaId", session)
-        ).execute()
-        val text = resp.body?.string().orEmpty()
-        record("频道列表", resp.code, text)
+        val (code, text) = signedCall("GET", "/client/v1/area/v1/detail/v1/channels?area=$areaId", null, session)
+        record("频道列表", code, text)
         if (text.isBlank()) return@withContext emptyList()
         val root = runCatching { JSONObject(text) }.getOrNull() ?: return@withContext emptyList()
         val data = root.opt("data")
@@ -192,58 +175,35 @@ object OopzApi {
 
     private var lastRtcRaw: String = ""
 
+    private fun parseRtc(text: String): RtcCredentials? =
+        RtcParser.parse(text)?.let { RtcCredentials(it.sdkAppId, it.userId, it.userSig, it.roomId) }
+
     /** 调 /channel/enter，再把响应里任何像 TRTC 凭证的字段捞出来。 */
     suspend fun enterVoiceChannel(session: Session, areaId: String, channelId: String): RtcCredentials? =
         withContext(Dispatchers.IO) {
-            val payload = JSONObject()
-                .put("type", "VOICE")
-                .put("area", areaId)
-                .put("channel", channelId)
-                .put("fromChannel", "")
-                .put("fromArea", "")
-                .put("password", "")
-                .put("sign", 0)
-                .put("pid", -1)
-            val req = Request.Builder()
-                .url("$BASE/client/v1/channel/enter")
-                .post(payload.toString().toRequestBody(jsonType))
-                .header("Oopz-Signature", session.signature)
-                .header("Oopz-Sign", session.signature)
-                .header("Oopz-Person", session.uid)
-                .header("Oopz-Device-Id", deviceId())
-                .header("Oopz-Time", System.currentTimeMillis().toString())
-                .header("Oopz-App-Version", APP_VERSION)
-                .header("Oopz-App-Version-Number", APP_VERSION_NUM)
-                .build()
-            val resp2 = http.newCall(req).execute()
-            val text = resp2.body?.string().orEmpty()
-            record("进频道", resp2.code, text)
+            val body = JSONObject()
+                .put("type", "VOICE").put("area", areaId).put("channel", channelId)
+                .put("fromChannel", "").put("fromArea", "").put("password", "")
+                .put("sign", 0).put("pid", -1)
+                .toString()
+            val path = "/client/v1/channel/enter"
+            val (code, text) = signedCall("POST", path, body, session)
+            record("进频道", code, text)
             lastRtcRaw = text
             parseRtc(text)
         }
 
-    private fun parseRtc(text: String): RtcCredentials? =
-        RtcParser.parse(text)?.let { RtcCredentials(it.sdkAppId, it.userId, it.userSig, it.roomId) }
-
-    /** 备用路径：部分版本的进频道挂在 /rtc/v1 基址下 */
+    /** 备用路径：部分版本挂在 /rtc/v1 基址下 */
     suspend fun enterVoiceChannelFallback(session: Session, areaId: String, channelId: String): RtcCredentials? =
         withContext(Dispatchers.IO) {
-            val payload = JSONObject()
+            val body = JSONObject()
                 .put("type", "VOICE").put("area", areaId).put("channel", channelId)
                 .put("fromChannel", "").put("fromArea", "").put("password", "")
                 .put("sign", 0).put("pid", -1)
-            val req = Request.Builder()
-                .url("$BASE/rtc/v1/channel/enter")
-                .post(payload.toString().toRequestBody(jsonType))
-                .header("Oopz-Signature", session.signature)
-                .header("Oopz-Sign", session.signature)
-                .header("Oopz-Person", session.uid)
-                .header("Oopz-Device-Id", deviceId())
-                .header("Oopz-Time", System.currentTimeMillis().toString())
-                .build()
-            val resp = http.newCall(req).execute()
-            val text = resp.body?.string().orEmpty()
-            record("进频道(rtc 基址)", resp.code, text)
+                .toString()
+            val path = "/rtc/v1/channel/enter"
+            val (code, text) = signedCall("POST", path, body, session)
+            record("进频道(rtc 基址)", code, text)
             parseRtc(text)
         }
 

@@ -32,6 +32,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         VoiceManager.init(this)
         LogStore.init(this)
+        OopzSigner.init(this, SessionStore.deviceId(this))
         requestPerms.launch(
             buildList {
                 add(Manifest.permission.RECORD_AUDIO)
@@ -71,8 +72,9 @@ fun AppRoot() {
         if (result.resultCode == android.app.Activity.RESULT_OK && data != null) {
             val uid = data.getStringExtra("uid").orEmpty()
             val sig = data.getStringExtra("signature").orEmpty()
+            val token = data.getStringExtra("token").orEmpty()
             if (sig.isNotBlank()) {
-                val fresh = OopzApi.Session(uid, sig, "网页登录")
+                val fresh = OopzApi.Session(uid, sig, "网页登录", token)
                 session = fresh
                 SessionStore.save(context, fresh)
                 status = "网页登录成功（uid=${uid.take(8)}…）"

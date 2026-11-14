@@ -73,7 +73,23 @@ checkRes=true 才是通过；false 表示签名无效/过期，需要重新登�
 ws-n.oopz.cn / ws1 / ws2 行为一致
 ```
 
-## 签名机制（逆向结论）
+## 签名算法（已破解并实现）
+
+```
+message   = md5Hex( path[?query][+body] ) + 毫秒时间戳
+             GET  → md5(path?query)
+             POST → md5(path?query + body)   ← 只签 path 会被 401
+signature = RSA-PKCS1v15(SHA-256, 内置私钥, message) → base64
+请求头     Oopz-Sign / Oopz-Time / Oopz-Request-Id / Oopz-Device-Id /
+           Oopz-App-Version-Number=91507 / Oopz-Platform / Oopz-Channel /
+           Oopz-Web / Origin / Referer
+```
+
+验证方式：用 WebCrypto 钩子抓到网页端 11 次真实待签报文，再用内置私钥导出的公钥逐个验签，
+全部通过；随后用本机实现直连 `gateway.oopz.cn`：`/health`、`/discovery/v3/home` 均返回 200 真数据。
+实现见 `OopzSigner.kt`，单测用公钥验证签名。
+
+## 早期逆向记录（保留）
 
 登录/鉴权用的 `Oopz-Sign` 是**用内置 RSA 私钥做的数字签名**：
 

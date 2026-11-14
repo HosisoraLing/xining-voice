@@ -13,6 +13,29 @@ import org.json.JSONObject
  */
 object CredentialExtractor {
 
+    /** 单独取 token（登录后 /client/v1 需要 Oopz-Token 头） */
+    fun extractToken(dump: String): String? {
+        val root = runCatching { JSONObject(dump) }.getOrNull() ?: return null
+        var best = ""
+        fun walk(node: Any?, depth: Int) {
+            if (depth > 5) return
+            when (node) {
+                is JSONObject -> node.keys().forEach { key ->
+                    val v = node.opt(key)
+                    if (v is String) {
+                        if (key.lowercase().contains("token") && v.length in 16..300 && v.none { it.isWhitespace() }) {
+                            if (v.length > best.length) best = v
+                        }
+                        if (v.trimStart().startsWith("{")) runCatching { walk(JSONObject(v), depth + 1) }
+                    } else walk(v, depth + 1)
+                }
+                is JSONArray -> for (i in 0 until node.length()) walk(node.opt(i), depth + 1)
+            }
+        }
+        walk(root, 0)
+        return best.ifBlank { null }
+    }
+
     fun extract(dump: String): Pair<String, String>? {
         val root = runCatching { JSONObject(dump) }.getOrNull() ?: return null
         var uid = ""
