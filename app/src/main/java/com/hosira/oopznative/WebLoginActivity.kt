@@ -77,61 +77,7 @@ class WebLoginActivity : Activity() {
         }.getOrNull()
     }
 
-    /**
-     * Oopz 网页端存储键统一是 oopz__ 前缀。登录后签名可能藏在
-     * localStorage 的某个 JSON 值里，所以这里做递归搜索：
-     *  1) 先找键名含 signature / token / login 的长值
-     *  2) 再把每个值当 JSON 解析，递归找 signature / token / uid
-     *  3) 最后退化为任意 32~200 位高熵串
-     */
-    private fun pickSession(dump: String): Pair<String, String>? {
-        val root = runCatching { JSONObject(dump) }.getOrNull() ?: return null
-        var uid = ""
-        var strong = ""
-        var weak = ""
-
-        fun consider(key: String, value: String) {
-            if (value.isBlank() || value.length > 400) return
-            val k = key.lowercase()
-            val v = value.trim()
-            when {
-                k.contains("uid") && v.length in 6..40 && uid.isBlank() -> uid = v
-                (k.contains("signature") || k.contains("token") || k.contains("login")) &&
-                    v.length in 20..200 && v.none { it.isWhitespace() } -> {
-                    if (v.length > strong.length) strong = v
-                }
-                v.length in 32..200 && v.none { it.isWhitespace() } -> {
-                    if (v.length > weak.length) weak = v
-                }
-            }
-        }
-
-        fun walkJson(obj: Any?, depth: Int) {
-            if (depth > 5) return
-            when (obj) {
-                is JSONObject -> {
-                    obj.keys().forEach { key ->
-                        val v = obj.opt(key)
-                        if (v is String) {
-                            consider(key, v)
-                            // 值本身可能是 JSON 字符串
-                            if (v.trimStart().startsWith("{")) {
-                                runCatching { walkJson(JSONObject(v), depth + 1) }
-                            }
-                        } else {
-                            walkJson(v, depth + 1)
-                        }
-                    }
-                }
-                is org.json.JSONArray -> for (i in 0 until obj.length()) walkJson(obj.opt(i), depth + 1)
-            }
-        }
-
-        walkJson(root, 0)
-        val best = strong.ifBlank { weak }
-        if (best.isBlank()) return null
-        return uid to best
-    }
+    private fun pickSession(dump: String): Pair<String, String>? = CredentialExtractor.extract(dump)
 
     inner class Bridge {
         @JavascriptInterface
