@@ -22,6 +22,8 @@ object VoiceManager {
 
     var onEvent: ((String) -> Unit)? = null
 
+    val isReady: Boolean get() = trtc != null
+
     /** 实时音量（0~100），给界面做麦克风电平条 */
     var localVolume: Int = 0
         private set

@@ -128,7 +128,15 @@ fun AppRoot() {
                         Text("设备诊断", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                         TextButton(onClick = { screen = s.back }) { Text("返回") }
                     }
-                    val text = remember(s.back) { DeviceDiag.snapshot(context, session) }
+                    val checks = remember(s.back, session) { DeviceDiag.selfCheck(context, session) }
+                    Text("自检", style = MaterialTheme.typography.labelLarge)
+                    checks.forEach { (name, ok) ->
+                        Text("${if (ok) "✓" else "✗"} $name",
+                            color = if (ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                    val text = remember(s.back, session) { DeviceDiag.snapshot(context, session) }
                     LazyColumn(Modifier.weight(1f)) {
                         items(text.lines()) { line -> Text(line, style = MaterialTheme.typography.labelSmall) }
                     }

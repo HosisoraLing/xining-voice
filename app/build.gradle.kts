@@ -11,8 +11,8 @@ android {
         applicationId = "com.hosira.oopznative"
         minSdk = 26
         targetSdk = 35
-        versionCode = 15
-        versionName = "0.14.1"
+        versionCode = 16
+        versionName = "0.15.0"
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 
@@ -38,6 +38,7 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
+    testOptions { unitTests.isIncludeAndroidResources = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }
     packaging { resources.excludes += "/META-INF/*" }
 }
@@ -59,4 +60,6 @@ dependencies {
     implementation("com.tencent.liteav:LiteAVSDK_TRTC:13.6.0.20747")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+    testImplementation("org.robolectric:robolectric:4.12.2")
+    testImplementation("androidx.test:core:1.5.0")
 }

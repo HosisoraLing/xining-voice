@@ -7,6 +7,25 @@ import android.media.AudioManager
 /** 设备/音频诊断：出问题时用户截图给开发者最快。 */
 object DeviceDiag {
 
+    /** 首次运行自检：每项给出通过与否，用户一眼看出缺什么 */
+    fun selfCheck(context: Context, session: OopzApi.Session?): List<Pair<String, Boolean>> {
+        val items = mutableListOf<Pair<String, Boolean>>()
+        items += "录音权限" to (context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED)
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            items += "通知权限" to (context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED)
+        }
+        items += "电池不优化白名单" to MiuiHelper.isIgnoringBatteryOptimizations(context)
+        items += "已登录（签名存在）" to (session != null && session.signature.isNotBlank())
+        items += "TRTC 引擎已初始化" to VoiceManager.isReady
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            items += "蓝牙权限（Android 12+）" to (context.checkSelfPermission(
+                android.Manifest.permission.BLUETOOTH_CONNECT) == android.content.pm.PackageManager.PERMISSION_GRANTED)
+        }
+        return items
+    }
+
     fun snapshot(context: Context, session: OopzApi.Session?): String {
         val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val sb = StringBuilder()
